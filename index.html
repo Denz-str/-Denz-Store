@@ -34,6 +34,8 @@ button:hover{background:#3aa0ff;}
 <div class="game-grid">
   <div class="game-card" onclick="pilihGame('Free Fire')">FREE FIRE</div>
   <div class="game-card" onclick="pilihGame('Mobile Legends')">MOBILE LEGENDS</div>
+  <div class="game-card" onclick="pilihGame('PUBG')">PUBG</div>
+  <div class="game-card" onclick="pilihGame('Efooball')">EFOOBALL</div>
 </div>
 
 <div class="topup-section" id="formTopup">
@@ -42,19 +44,31 @@ button:hover{background:#3aa0ff;}
 <label>ID Game:</label>
 <input type="text" id="idgame" placeholder="Masukkan ID">
 
-<label>Pilih Diamonds:</label>
+<label>Kode Promo (Opsional):</label>
+<input type="text" id="kodePromo" placeholder="Masukkan kode promo">
+
+<label>Pilih Nominal:</label>
 <div class="nominal-grid" id="diamondList"></div>
 
 <label>Metode Pembayaran:</label>
-<select id="pembayaran">
+<select id="pembayaran" onchange="updateHarga()">
   <option value="">-- Pilih Pembayaran --</option>
-  <option>Dana</option>
-  <option>OVO</option>
-  <option>GoPay</option>
-  <option>Transfer Bank</option>
+  <optgroup label="E-wallet">
+    <option value="Dana">Dana</option>
+    <option value="Qr Dana">Qr Dana</option>
+    <option value="OVO">OVO</option>
+    <option value="GoPay">GoPay</option>
+  </optgroup>
+  <optgroup label="Pulsa">
+    <option value="Pulsa Indosat">Pulsa Indosat</option>
+  </optgroup>
+  <optgroup label="Toko Serbaguna">
+    <option value="Alfamart">Alfamart</option>
+    <option value="Indomaret">Indomaret</option>
+  </optgroup>
 </select>
 
-<h3>Total: Rp <span id="totalHarga">0</span></h3>
+<h3>Total: <span id="totalHarga">0</span></h3>
 
 <button onclick="kirimWA()">Top Up Sekarang</button>
 </div>
@@ -65,18 +79,49 @@ let selectedDiamond = "";
 let hargaRupiah = 0;
 let gameDipilih = "";
 
+// Kode promo contoh: "FREE5" = diskon Rp5000, "ML10" = diskon 10%
+let kodePromoAktif = {
+  "FREE5": 5000,
+  "ML10": 10
+};
+
 const data = {
   "Free Fire":[
-    {dm:"70", harga:11000},
-    {dm:"140", harga:18000},
-    {dm:"355", harga:47000},
-    {dm:"720", harga:94000}
+    {dm:"5 💎", harga:900},
+    {dm:"12 💎", harga:2500},
+    {dm:"50 💎", harga:7000},
+    {dm:"70 💎", harga:11000},
+    {dm:"140 💎", harga:18000},
+    {dm:"355 💎", harga:47000},
+    {dm:"720 💎", harga:94000},
+    {dm:"1050 💎", harga:137000},
+    {dm:"Membership Bulanan", harga:84000},
+    {dm:"Membership Mingguan", harga:28500}
   ],
   "Mobile Legends":[
-    {dm:"71", harga:18500},
-    {dm:"148 + 8 Bonus", harga:44000},
-    {dm:"215 + 25 Bonus", harga:62000},
-    {dm:"408", harga:110000}
+    {dm:"12 💎", harga:3000},
+    {dm:"14 💎", harga:4000},
+    {dm:"36 💎", harga:10500},
+    {dm:"71 💎", harga:18500},
+    {dm:"148 💎", harga:44000},
+    {dm:"215 💎 + 25 Bonus", harga:62000},
+    {dm:"408 💎", harga:110000},
+    {dm:"1045 💎", harga:280000}
+  ],
+  "PUBG":[
+    {dm:"60 UC", harga:16000},
+    {dm:"240 UC", harga:62000},
+    {dm:"300 UC", harga:76000},
+    {dm:"600 UC", harga:156000},
+    {dm:"720 UC", harga:185000},
+    {dm:"1080 UC", harga:280000}
+  ],
+  "Efooball":[
+    {dm:"130 Coins 🪙", harga:21000},
+    {dm:"550 Coins 🪙", harga:83500},
+    {dm:"750 Coins 🪙", harga:111570},
+    {dm:"1040 Coins 🪙", harga:155000},
+    {dm:"2130 Coins 🪙", harga:309000}
   ]
 };
 
@@ -97,7 +142,7 @@ function renderDiamond(){
   data[gameDipilih].forEach(d=>{
     let div=document.createElement("div");
     div.className="nominal-btn";
-    div.innerHTML=d.dm+" 💎<br>Rp "+d.harga;
+    div.innerHTML=d.dm+"<br>Rp "+d.harga;
     div.onclick=function(){ pilihDiamond(d.dm,d.harga,this); }
     box.appendChild(div);
   });
@@ -108,27 +153,73 @@ function pilihDiamond(dm,harga,el){
   hargaRupiah=harga;
   document.querySelectorAll(".nominal-btn").forEach(b=>b.classList.remove("nominal-active"));
   el.classList.add("nominal-active");
-  document.getElementById("totalHarga").innerText=hargaRupiah;
+  
+  // update harga sesuai opsi pembayaran & diskon
+  updateHarga();
+}
+
+function updateHarga(){
+  let pembayaran = document.getElementById("pembayaran").value;
+  let total = hargaRupiah;
+
+  // Sistem lama Pulsa
+  if(pembayaran === "Pulsa Indosat"){
+    if(hargaRupiah <= 50000){ 
+      total = hargaRupiah + 2000; 
+    } else { 
+      total = hargaRupiah + 6000; 
+    }
+  }
+
+  // Total asli dulu
+  let totalDisplay = total;
+
+  // Cek diskon
+  let kode = document.getElementById("kodePromo").value.trim();
+  if(kodePromoAktif[kode]){
+    let diskon = 0;
+    if(kodePromoAktif[kode] < 100){ // diskon persen
+      diskon = Math.round(total * kodePromoAktif[kode]/100);
+    } else { // diskon nominal
+      diskon = kodePromoAktif[kode];
+    }
+
+    let hargaAkhir = total - diskon;
+    if(hargaAkhir < 0) hargaAkhir = 0; // jaga supaya gak negatif
+
+    // Tampilkan format: harga asli + diskon = harga akhir
+    totalDisplay = total + " - Diskon " + (kodePromoAktif[kode]<100 ? kodePromoAktif[kode]+"%" : "Rp "+diskon) + " = " + hargaAkhir;
+  }
+
+  document.getElementById("totalHarga").innerText = totalDisplay;
 }
 
 function kirimWA(){
   let id=document.getElementById("idgame").value.trim();
   let pembayaran=document.getElementById("pembayaran").value;
+  let kode = document.getElementById("kodePromo").value.trim();
 
-  // cek data belum lengkap
   if(id==="" || selectedDiamond==="" || pembayaran==="" || gameDipilih===""){
     alert("Lengkapi semua data terlebih dahulu!");
     return;
   }
 
+  let totalHarga = document.getElementById("totalHarga").innerText;
+
   let pesan=
   "Halo Denz Store,%0A%0A"+
   "Game: "+gameDipilih+"%0A"+
   "ID: "+id+"%0A"+
-  "Diamond: "+selectedDiamond+" 💎%0A"+
-  "Harga: Rp "+hargaRupiah+"%0A"+
-  "Pembayaran: "+pembayaran+"%0A%0A"+
-  "Tolong diproses ya 🙏";
+  "Nominal: "+selectedDiamond+"%0A"+
+  "Harga: Rp "+totalHarga+"%0A"+
+  "Pembayaran: "+pembayaran;
+
+  // Tambah kode promo di WA kalau valid
+  if(kodePromoAktif[kode]){
+    pesan += "%0AKode Promo: "+kode;
+  }
+
+  pesan += "%0A%0ATolong diproses ya 🙏";
 
   window.open("https://wa.me/6285649107941?text="+pesan);
 }
